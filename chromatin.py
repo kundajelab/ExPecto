@@ -117,6 +117,8 @@ def fetchSeqs(chr, pos, ref, alt, shift=0, inputsize=2000):
     # return string: ref sequence, string: alt sequence, Bool: whether ref allele matches with reference genome
     seq = genome.sequence({'chr': chr, 'start': pos + shift -
                            int(windowsize / 2 - 1), 'stop': pos + shift + int(windowsize / 2)})
+    if (ref=="."):
+        ref = seq[mutpos]
     return seq[:mutpos] + ref + seq[(mutpos + len(ref)):], seq[:mutpos] + alt + seq[(mutpos + len(ref)):], seq[mutpos:(mutpos + len(ref))].upper() == ref.upper()
 
 
