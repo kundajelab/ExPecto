@@ -20,6 +20,7 @@ import h5py
 
 parser = argparse.ArgumentParser(description='Predict variant chromatin effects')
 parser.add_argument('inputfile', type=str, help='Input file in vcf format')
+parser.add_argument('genome', type=str, help='Path to genome file')
 parser.add_argument('--maxshift', action="store",
                     dest="maxshift", type=int, default=800,
                     help='Maximum shift distance for computing nearby effects')
@@ -30,7 +31,7 @@ parser.add_argument('--batchsize', action="store", dest="batchsize",
 parser.add_argument('--cuda', action='store_true')
 args = parser.parse_args()
 
-genome = pyfasta.Fasta('./resources/hg19.fa')
+genome = pyfasta.Fasta(args.genome)
 model = load_lua('./resources/deepsea.beluga.2002.cpu')
 model.evaluate()
 if args.cuda:
@@ -119,7 +120,7 @@ def fetchSeqs(chr, pos, ref, alt, shift=0, inputsize=2000):
                            int(windowsize / 2 - 1), 'stop': pos + shift + int(windowsize / 2)})
     if (ref=="."):
         ref = seq[mutpos]
-    return seq[:mutpos] + ref + seq[(mutpos + len(ref)):], seq[:mutpos] + alt + seq[(mutpos + len(ref)):], seq[mutpos:(mutpos + len(ref))].upper() == ref.upper()
+    return seq[:mutpos] + ref + seq[(mutpos + len(ref)):], seq[:mutpos] + alt + seq[(mutpos + len(ref)):], seq[mutpos:(mutpos + len(ref))].upper() == ref.upper(), seq[mutpos:(mutpos + len(ref))].upper() == alt.upper()
 
 
 vcf = pd.read_csv(inputfile, sep='\t', header=None, comment='#')
@@ -129,20 +130,25 @@ vcf.iloc[:, 0] = 'chr' + vcf.iloc[:, 0].map(str).str.replace('chr', '')
 vcf = vcf[vcf.iloc[:, 0].isin(CHRS)]
 
 for shift in [0, ] + list(range(-200, -maxshift - 1, -200)) + list(range(200, maxshift + 1, 200)):
+    print("On shift",shift)
     refseqs = []
     altseqs = []
     ref_matched_bools = []
+    alt_matched_bools = []
     for i in range(vcf.shape[0]):
-        refseq, altseq, ref_matched_bool = fetchSeqs(
+        refseq, altseq, ref_matched_bool, alt_matched_bool = fetchSeqs(
             vcf[0][i], vcf[1][i], vcf[3][i], vcf[4][i], shift=shift)
         refseqs.append(refseq)
         altseqs.append(altseq)
         ref_matched_bools.append(ref_matched_bool)
+        alt_matched_bools.append(alt_matched_bool)
 
     if shift == 0:
         # only need to be checked once
         print("Number of variants with reference allele matched with reference genome:")
         print(np.sum(ref_matched_bools))
+        print("Number of variants with alternative allele matched with reference genome:")
+        print(np.sum(alt_matched_bools))
         print("Number of input variants:")
         print(len(ref_matched_bools))
 
@@ -151,6 +157,7 @@ for shift in [0, ] + list(range(-200, -maxshift - 1, -200)) + list(range(200, ma
     #print(ref_encoded.shape)
     #print(alt_encoded.shape)
 
+    print("Making reference allele preds")
     ref_preds = []
     for i in range(int(1 + ref_encoded.shape[0] / batchSize)):
         input = torch.from_numpy(ref_encoded[int(i*batchSize):int((i+1)*batchSize),:,:]).unsqueeze(3)
@@ -159,6 +166,7 @@ for shift in [0, ] + list(range(-200, -maxshift - 1, -200)) + list(range(200, ma
         ref_preds.append(model.forward(input).cpu().numpy().copy())
     ref_preds = np.vstack(ref_preds)
 
+    print("Making alternative allele preds")
     alt_preds = []
     for i in range(int(1 + alt_encoded.shape[0] / batchSize)):
         input = torch.from_numpy(alt_encoded[int(i*batchSize):int((i+1)*batchSize),:,:]).unsqueeze(3)
