@@ -9,6 +9,7 @@ Example:
         $ python chromatin.py ./example/example.vcf
 
 """
+from __future__ import print_function
 import argparse
 import math
 import pyfasta
@@ -159,7 +160,9 @@ for shift in [0, ] + list(range(-200, -maxshift - 1, -200)) + list(range(200, ma
 
     print("Making reference allele preds")
     ref_preds = []
-    for i in range(int(1 + ref_encoded.shape[0] / batchSize)):
+    for i in range(int(np.ceil(ref_encoded.shape[0] / float(batchSize)))):
+        if (args.cuda==False):
+            print("On batch",i+1,"of",int(1 + ref_encoded.shape[0] / batchSize))
         input = torch.from_numpy(ref_encoded[int(i*batchSize):int((i+1)*batchSize),:,:]).unsqueeze(3)
         if args.cuda:
             input = input.cuda()
@@ -168,7 +171,9 @@ for shift in [0, ] + list(range(-200, -maxshift - 1, -200)) + list(range(200, ma
 
     print("Making alternative allele preds")
     alt_preds = []
-    for i in range(int(1 + alt_encoded.shape[0] / batchSize)):
+    for i in range(int(np.ceil(alt_encoded.shape[0] / float(batchSize)))):
+        if (args.cuda==False):
+            print("On batch",i+1,"of",int(1 + alt_encoded.shape[0] / batchSize))
         input = torch.from_numpy(alt_encoded[int(i*batchSize):int((i+1)*batchSize),:,:]).unsqueeze(3)
         if args.cuda:
             input = input.cuda()
