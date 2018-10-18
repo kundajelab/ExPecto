@@ -2,3 +2,4 @@ resources/*
 **/*.tar.gz
 **/*.csv
 **/*.h5
+**/*ipynb_checkpoints
